@@ -39,7 +39,7 @@ jobs:
             ${{ steps.out.outputs.backend_image }}
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/blog-backend:latest
 
-      - name: Build & push frontend (repo root)
+      - name: Build & push frontend (root)
         uses: docker/build-push-action@v6
         with:
           context: .
