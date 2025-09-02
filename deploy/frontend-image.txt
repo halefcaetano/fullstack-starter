@@ -1,0 +1,1 @@
+docker.io/halefcaetano13/blog-frontend:proxy-1756789781
