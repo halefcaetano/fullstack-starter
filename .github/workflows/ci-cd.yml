@@ -2,23 +2,28 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: read
+  id-token: write # harmless even if unused; needed if you switch to WI later
 
 env:
   IMAGE_TAG: ${{ github.sha }}
-  # Image names on Docker Hub (change if you prefer different repo names)
+  # Docker Hub repo names
   BACKEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-backend
   FRONTEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-frontend
+  # Cloud Run (optional)
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ secrets.GCP_REGION }}
+  BACKEND_SERVICE: blog-backend
+  FRONTEND_SERVICE: blog-frontend
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,9 +33,7 @@ jobs:
         shell: bash
         run: |
           detect_path() {
-            # search in common places; first match wins
-            local name="$1"
-            shift
+            local name="$1"; shift
             for p in "$@"; do
               if [ -d "$p" ] && ls "$p"/Dockerfile* >/dev/null 2>&1; then
                 echo "$name=$p" >> "$GITHUB_OUTPUT"
@@ -39,13 +42,14 @@ jobs:
             done
             echo "$name=" >> "$GITHUB_OUTPUT"
           }
-
-          # Add/modify candidates as needed
+          # Candidates (expand as you like)
           detect_path backend backend apps/backend api server services/backend packages/backend
           detect_path frontend frontend apps/frontend web client ui services/frontend packages/frontend
 
-          echo "Detected BACKEND_CTX='${{ steps.detect.outputs.backend }}'"
-          echo "Detected FRONTEND_CTX='${{ steps.detect.outputs.frontend }}'"
+      - name: Show detected contexts
+        run: |
+          echo "BACKEND_CTX='${{ steps.detect.outputs.backend }}'"
+          echo "FRONTEND_CTX='${{ steps.detect.outputs.frontend }}'"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -65,20 +69,4 @@ jobs:
           context: ${{ steps.detect.outputs.backend }}
           push: true
           tags: |
-            ${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }}
-            ${{ env.BACKEND_IMAGE }}:latest
-          cache-from: type=gha,scope=backend
-          cache-to: type=gha,mode=max,scope=backend
-
-      # ---------- FRONTEND ----------
-      - name: Build & push frontend
-        if: ${{ steps.detect.outputs.frontend != '' }}
-        uses: docker/build-push-action@v6
-        with:
-          context: ${{ steps.detect.outputs.frontend }}
-          push: true
-          tags: |
-            ${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }}
-            ${{ env.FRONTEND_IMAGE }}:latest
-          cache-from: type=gha,scope=frontend
-          cache-to: type=gha,mode=max,scope=frontend
+            ${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TA
