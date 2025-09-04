@@ -2,31 +2,23 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: read
-  # not strictly required for key-based auth, but harmless if you later switch to Workload Identity
-  id-token: write
 
 env:
   IMAGE_TAG: ${{ github.sha }}
-  # Docker Hub repo names
+  # Image names on Docker Hub (change if you prefer different repo names)
   BACKEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-backend
   FRONTEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-frontend
-  # Cloud Run (optional)
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  REGION: ${{ secrets.GCP_REGION }}
-  BACKEND_SERVICE: blog-backend
-  FRONTEND_SERVICE: blog-frontend
-  # Helper flag so we can conditionally run GCP steps
-  HAS_GCP: ${{ secrets.GCP_SA_KEY != '' && secrets.GCP_PROJECT_ID != '' && secrets.GCP_REGION != '' }}
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,7 +28,7 @@ jobs:
         shell: bash
         run: |
           detect_path() {
-            # first arg is the output name; remaining are candidate dirs
+            # search in common places; first match wins
             local name="$1"
             shift
             for p in "$@"; do
@@ -47,9 +39,11 @@ jobs:
             done
             echo "$name=" >> "$GITHUB_OUTPUT"
           }
+
           # Add/modify candidates as needed
           detect_path backend backend apps/backend api server services/backend packages/backend
           detect_path frontend frontend apps/frontend web client ui services/frontend packages/frontend
+
           echo "Detected BACKEND_CTX='${{ steps.detect.outputs.backend }}'"
           echo "Detected FRONTEND_CTX='${{ steps.detect.outputs.frontend }}'"
 
@@ -89,31 +83,27 @@ jobs:
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 
-      # ---------- Cloud Run deploy (optional) ----------
-      - name: Google Auth (key JSON)
-        if: ${{ env.HAS_GCP == 'true' }}
+      # ---------- Optional: GCP Cloud Run deploy (runs only if key provided) ----------
+      - name: Google Cloud auth
+        if: ${{ secrets.GCP_SA_KEY != '' }}
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Set gcloud defaults
-        if: ${{ env.HAS_GCP == 'true' }}
-        run: |
-          gcloud config set project "${PROJECT_ID}"
-          gcloud config set run/region "${REGION}"
-
       - name: Deploy backend to Cloud Run
-        if: ${{ env.HAS_GCP == 'true' && steps.detect.outputs.backend != '' }}
+        if: ${{ secrets.GCP_SA_KEY != '' && steps.detect.outputs.backend != '' && vars.PROJECT_ID != '' && vars.REGION != '' && vars.BACKEND_SERVICE != '' }}
         uses: google-github-actions/deploy-cloudrun@v2
         with:
-          service: ${{ env.BACKEND_SERVICE }}
-          region: ${{ env.REGION }}
-          image: docker.io/${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }}
+          project_id: ${{ vars.PROJECT_ID }}
+          region: ${{ vars.REGION }}
+          service: ${{ vars.BACKEND_SERVICE }}
+          image: ${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }}
 
       - name: Deploy frontend to Cloud Run
-        if: ${{ env.HAS_GCP == 'true' && steps.detect.outputs.frontend != '' }}
+        if: ${{ secrets.GCP_SA_KEY != '' && steps.detect.outputs.frontend != '' && vars.PROJECT_ID != '' && vars.REGION != '' && vars.FRONTEND_SERVICE != '' }}
         uses: google-github-actions/deploy-cloudrun@v2
         with:
-          service: ${{ env.FRONTEND_SERVICE }}
-          region: ${{ env.REGION }}
-          image: docker.io/${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }}
+          project_id: ${{ vars.PROJECT_ID }}
+          region: ${{ vars.REGION }}
+          service: ${{ vars.FRONTEND_SERVICE }}
+          image: ${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }}
