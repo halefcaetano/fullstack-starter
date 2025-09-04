@@ -2,16 +2,18 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main" ]
-  workflow_dispatch: {}
+    branches: [ main ]
+  workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: read
 
 env:
   IMAGE_TAG: ${{ github.sha }}
-  REGION: ${{ secrets.GCP_REGION }}
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  BACKEND_SERVICE: blog-backend
-  FRONTEND_SERVICE: blog-frontend
+  # Image names on Docker Hub (change if you prefer different repo names)
+  BACKEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-backend
+  FRONTEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-frontend
 
 jobs:
   build-and-deploy:
@@ -21,10 +23,33 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Detect app paths
+        id: detect
+        shell: bash
+        run: |
+          detect_path() {
+            # search in common places; first match wins
+            local name="$1"
+            shift
+            for p in "$@"; do
+              if [ -d "$p" ] && ls "$p"/Dockerfile* >/dev/null 2>&1; then
+                echo "$name=$p" >> "$GITHUB_OUTPUT"
+                return 0
+              fi
+            done
+            echo "$name=" >> "$GITHUB_OUTPUT"
+          }
+
+          # Add/modify candidates as needed
+          detect_path backend backend apps/backend api server services/backend packages/backend
+          detect_path frontend frontend apps/frontend web client ui services/frontend packages/frontend
+
+          echo "Detected BACKEND_CTX='${{ steps.detect.outputs.backend }}'"
+          echo "Detected FRONTEND_CTX='${{ steps.detect.outputs.frontend }}'"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ---- DOCKER HUB LOGIN (uses secrets) ----
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -32,49 +57,28 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           logout: true
 
-      # ---- BUILD & PUSH BACKEND ----
-      - name: Build backend image
-        run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-backend:${{ env.IMAGE_TAG }} ./backend
-          docker tag  ${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-backend:${{ env.IMAGE_TAG }} ${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-backend:latest
-      - name: Push backend image
-        run: |
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-backend:${{ env.IMAGE_TAG }}
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-backend:latest
-
-      # ---- BUILD & PUSH FRONTEND ----
-      - name: Build frontend image
-        run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-frontend:${{ env.IMAGE_TAG }} ./client
-          docker tag  ${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-frontend:${{ env.IMAGE_TAG }} ${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-frontend:latest
-      - name: Push frontend image
-        run: |
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-frontend:${{ env.IMAGE_TAG }}
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-frontend:latest
-
-      # ---- AUTH TO GCP ----
-      - name: Google Auth
-        uses: google-github-actions/auth@v2
+      # ---------- BACKEND ----------
+      - name: Build & push backend
+        if: ${{ steps.detect.outputs.backend != '' }}
+        uses: docker/build-push-action@v6
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          context: ${{ steps.detect.outputs.backend }}
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }}
+            ${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
 
-      - name: Set up gcloud
-        run: |
-          gcloud config set project $PROJECT_ID
-          gcloud config set run/region $REGION
-
-      # ---- DEPLOY BACKEND TO CLOUD RUN ----
-      - name: Deploy backend to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
+      # ---------- FRONTEND ----------
+      - name: Build & push frontend
+        if: ${{ steps.detect.outputs.frontend != '' }}
+        uses: docker/build-push-action@v6
         with:
-          service: ${{ env.BACKEND_SERVICE }}
-          region: ${{ env.REGION }}
-          image: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-backend:${{ env.IMAGE_TAG }}
-
-      # ---- DEPLOY FRONTEND TO CLOUD RUN ----
-      - name: Deploy frontend to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: ${{ env.FRONTEND_SERVICE }}
-          region: ${{ env.REGION }}
-          image: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-frontend:${{ env.IMAGE_TAG }}
+          context: ${{ steps.detect.outputs.frontend }}
+          push: true
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }}
+            ${{ env.FRONTEND_IMAGE }}:latest
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
