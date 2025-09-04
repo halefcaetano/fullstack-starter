@@ -5,79 +5,46 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  packages: read
-
-env:
-  IMAGE_TAG: ${{ github.sha }}
-  # Image names on Docker Hub (change if you prefer different repo names)
-  BACKEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-backend
-  FRONTEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/fullstack-starter-frontend
-
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Detect app paths
-        id: detect
-        shell: bash
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: skilful-webbing-385501
+
+      - name: Deploy backend
         run: |
-          detect_path() {
-            # search in common places; first match wins
-            local name="$1"
-            shift
-            for p in "$@"; do
-              if [ -d "$p" ] && ls "$p"/Dockerfile* >/dev/null 2>&1; then
-                echo "$name=$p" >> "$GITHUB_OUTPUT"
-                return
-              fi
-            done
-            echo "$name=" >> "$GITHUB_OUTPUT"
-          }
+          echo "=== Deploying backend ==="
+          echo "Using image: docker.io/halefcaetano13/fullstack-starter-backend:latest"
+          gcloud run deploy blog-backend \
+            --image=docker.io/halefcaetano13/fullstack-starter-backend:latest \
+            --region=us-central1 --platform=managed --quiet
+          echo "Backend Service URL:"
+          gcloud run services describe blog-backend \
+            --region=us-central1 --platform=managed --format='value(status.url)'
+          echo "Latest revision:"
+          gcloud run revisions list --service=blog-backend --region=us-central1 --limit=1
 
-          # Add/modify candidates as needed
-          detect_path backend backend apps/backend api server services/backend packages/backend
-          detect_path frontend frontend apps/frontend web client ui services/frontend packages/frontend
-
-          echo "Detected BACKEND_CTX='${{ steps.detect.outputs.backend }}'"
-          echo "Detected FRONTEND_CTX='${{ steps.detect.outputs.frontend }}'"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          logout: true
-
-      # ---------- BACKEND ----------
-      - name: Build & push backend
-        if: ${{ steps.detect.outputs.backend != '' }}
-        uses: docker/build-push-action@v6
-        with:
-          context: ${{ steps.detect.outputs.backend }}
-          push: true
-          tags: |
-            ${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }}
-            ${{ env.BACKEND_IMAGE }}:latest
-          cache-from: type=gha,scope=backend
-          cache-to: type=gha,mode=max,scope=backend
-
-      # ---------- FRONTEND ----------
-      - name: Build & push frontend
-        if: ${{ steps.detect.outputs.frontend != '' }}
-        uses: docker/build-push-action@v6
-        with:
-          context: ${{ steps.detect.outputs.frontend }}
-          push: true
-          tags: |
-            ${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }}
-            ${{ env.FRONTEND_IMAGE }}:latest
-          cache-from: type=gha,scope=frontend
-          cache-to: type=gha,mode=max,scope=frontend
+      - name: Deploy frontend
+        run: |
+          echo "=== Deploying frontend ==="
+          echo "Using image: docker.io/halefcaetano13/fullstack-starter-frontend:latest"
+          gcloud run deploy blog-frontend \
+            --image=docker.io/halefcaetano13/fullstack-starter-frontend:latest \
+            --region=us-central1 --platform=managed --quiet
+          echo "Frontend Service URL:"
+          gcloud run services describe blog-frontend \
+            --region=us-central1 --platform=managed --format='value(status.url)'
+          echo "Latest revision:"
+          gcloud run revisions list --service=blog-frontend --region=us-central1 --limit=1
