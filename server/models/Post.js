@@ -1,12 +1,16 @@
+// server/models/Post.js
 const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
-const PostSchema = new mongoose.Schema(
+const postSchema = new Schema(
   {
     title: { type: String, required: true, trim: true },
     content: { type: String, required: true },
-    author: { type: String, default: 'Anonymous' }
+    tags: [{ type: String, trim: true }],
+    published: { type: Boolean, default: true },
+    author: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model('Post', PostSchema);
+module.exports = mongoose.model('Post', postSchema);

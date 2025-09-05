@@ -1,30 +1,40 @@
+// server/index.js
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 
+const authRoutes = require('./routes/auth');
+const postRoutes = require('./routes/posts');
+
 const app = express();
+
+// ---- config
+const PORT = process.env.PORT || 4000;
+const MONGODB_URI = process.env.MONGODB_URI; // from server/.env
+
+// ---- middleware (must be before routes)
 app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 3000;
-const MONGODB_URI = process.env.MONGODB_URI ||
-  'mongodb://root:example@127.0.0.1:27017/blog?authSource=admin';
+// ---- routes
+app.use('/api/auth', authRoutes);
+app.use('/api/posts', postRoutes);
 
-async function start() {
-  await mongoose.connect(MONGODB_URI);
-  console.log('Mongo connected');
+app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-  app.use('/api/posts', require('./routes/postRoutes'));
+// ---- db + server startup
+(async () => {
+  try {
+    if (!MONGODB_URI) throw new Error('MONGODB_URI is missing. Add it to server/.env');
+    await mongoose.connect(MONGODB_URI);
+    console.log('✅ MongoDB connected');
 
-  app.get('/api/health', (_req, res) => res.json({ ok: true }));
-
-  app.listen(PORT, () => {
-    console.log(`Backend listening on http://localhost:${PORT}`);
-  });
-}
-
-start().catch((e) => {
-  console.error('Startup error:', e);
-  process.exit(1);
-});
+    app.listen(PORT, () => {
+      console.log(`✅ Backend listening on http://localhost:${PORT}`);
+    });
+  } catch (err) {
+    console.error('❌ Startup error:', err.message);
+    process.exit(1);
+  }
+})();
