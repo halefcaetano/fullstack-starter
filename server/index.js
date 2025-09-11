@@ -4,23 +4,26 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 
-const authRoutes = require('./routes/auth');
-const postRoutes = require('./routes/posts');
-
 const app = express();
 
 // ---- config
 const PORT = process.env.PORT || 4000;
-const MONGODB_URI = process.env.MONGODB_URI; // from server/.env
+const MONGODB_URI = process.env.MONGODB_URI; // set in server/.env
+
+// If deploying behind a proxy (e.g., Cloud Run/Heroku), trust it
+app.set('trust proxy', 1);
 
 // ---- middleware (must be before routes)
 app.use(cors());
-app.use(express.json());
-
+app.use(express.json()); // <-- must be before routes
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Backend listening on http://localhost:${PORT}`);
+});
 // ---- routes
-app.use('/api/auth', authRoutes);
-app.use('/api/posts', postRoutes);
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/posts', require('./routes/posts'));
 
+// health check
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 // ---- db + server startup

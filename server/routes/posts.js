@@ -1,41 +1,42 @@
-// server/routes/posts.js
 const express = require('express');
-const router = express.Router();
 const Post = require('../models/Post');
 const requireAuth = require('../middleware/requireAuth');
 
-// Create a post (requires login)
+const router = express.Router();
+
+// GET /api/posts  -> homepage feed (no auth needed)
+router.get('/', async (_req, res) => {
+  try {
+    const posts = await Post.find({ published: true })
+      .sort({ createdAt: -1 })
+      .populate('author', 'username email')
+      .lean();
+    res.json(posts);
+  } catch (e) {
+    console.error('[GET /api/posts] error:', e);
+    res.status(500).json({ error: 'Failed to load posts' });
+  }
+});
+
+// POST /api/posts -> create a recipe (auth required)
 router.post('/', requireAuth, async (req, res) => {
   try {
-    if (!req.body || typeof req.body !== 'object') {
-      return res.status(400).json({ error: 'Request body must be JSON' });
-    }
-
-    const { title, content, tags = [], published = true } = req.body;
-    if (!title || !content) {
-      return res.status(400).json({ error: 'title and content are required' });
-    }
-
-    // normalize tags: accept array or comma-separated string
-    const tagsArr = Array.isArray(tags)
-      ? tags
-      : (typeof tags === 'string'
-          ? tags.split(',').map(t => t.trim()).filter(Boolean)
-          : []);
+    const { title, content, tags, published } = req.body;
+    if (!title || !content) return res.status(400).json({ error: 'title and content required' });
 
     const post = await Post.create({
       title,
       content,
-      tags: tagsArr,
-      published,
-      author: req.user.id, // set by requireAuth
+      tags: Array.isArray(tags) ? tags : [],
+      published: published !== undefined ? !!published : true,
+      author: req.user.id,
     });
 
     const populated = await post.populate('author', 'username email');
-    res.status(201).json({ message: 'Post created', post: populated });
-  } catch (err) {
-    console.error('POST /api/posts error:', err);
-    res.status(500).json({ error: 'Server error' });
+    res.status(201).json(populated);
+  } catch (e) {
+    console.error('[POST /api/posts] error:', e);
+    res.status(500).json({ error: 'Failed to create post' });
   }
 });
 

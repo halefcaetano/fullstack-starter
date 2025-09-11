@@ -8,7 +8,7 @@ const postSchema = new Schema(
     content: { type: String, required: true },
     tags: [{ type: String, trim: true }],
     published: { type: Boolean, default: true },
-    author: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    author: { type: Schema.Types.ObjectId, ref: 'User', required: true }, // must match User model name
   },
   { timestamps: true }
 );

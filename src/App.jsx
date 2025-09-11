@@ -1,100 +1,48 @@
-import { useEffect, useState } from 'react';
+// src/App.jsx
+import { useState } from 'react'
+import { useAuth } from './auth'
+import AuthForm from './components/AuthForm'
+import NewPostForm from './components/NewPostForm'
+import PostList from './components/PostList'
+import './App.css'
+
+function Nav() {
+  const { user, logout } = useAuth()
+  return (
+    <div className="w-full flex items-center justify-between py-3">
+      <div className="font-bold text-xl">Recipe Feed</div>
+      <div className="flex items-center gap-3">
+        {user ? (
+          <>
+            <span className="text-sm">Logged in as {user.username || user.email}</span>
+            <button className="px-3 py-1 rounded border" onClick={logout}>Log out</button>
+          </>
+        ) : (
+          <span className="text-sm text-neutral-600">Not logged in</span>
+        )}
+      </div>
+    </div>
+  )
+}
 
 export default function App() {
-  const [posts, setPosts] = useState([]);
-  const [form, setForm] = useState({ title: '', content: '', author: '' });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  async function loadPosts() {
-    setError('');
-    try {
-      const res = await fetch('/api/posts');
-      const data = await res.json();
-      setPosts(Array.isArray(data) ? data : []);
-    } catch (e) {
-      setError('Failed to load posts');
-    }
-  }
-
-  useEffect(() => { loadPosts(); }, []);
-
-  async function onSubmit(e) {
-    e.preventDefault();
-    if (!form.title || !form.content) return;
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch('/api/posts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
-      });
-      const created = await res.json();
-      if (!res.ok) throw new Error(created?.error || 'Failed to create');
-      setForm({ title: '', content: '', author: '' });
-      // Show the newly created post immediately
-      setPosts(prev => [created, ...prev]);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { user } = useAuth()
+  const [refreshKey, setRefreshKey] = useState(0)
+  const bump = () => setRefreshKey(k => k + 1)
 
   return (
-    <main style={{ maxWidth: 720, margin: '40px auto', fontFamily: 'system-ui, sans-serif' }}>
-      <h1>Blog</h1>
-
-      <form onSubmit={onSubmit} style={{ display: 'grid', gap: 8, marginBottom: 24 }}>
-        <label>
-          Title *
-          <input
-            value={form.title}
-            onChange={e => setForm({ ...form, title: e.target.value })}
-            required
-            style={{ width: '100%', padding: 8 }}
-          />
-        </label>
-
-        <label>
-          Content *
-          <textarea
-            value={form.content}
-            onChange={e => setForm({ ...form, content: e.target.value })}
-            required
-            rows={5}
-            style={{ width: '100%', padding: 8 }}
-          />
-        </label>
-
-        <label>
-          Author (optional)
-          <input
-            value={form.author}
-            onChange={e => setForm({ ...form, author: e.target.value })}
-            style={{ width: '100%', padding: 8 }}
-          />
-        </label>
-
-        <button disabled={loading} type="submit">
-          {loading ? 'Creating…' : 'Create Post'}
-        </button>
-        {error && <div style={{ color: 'crimson' }}>{error}</div>}
-      </form>
-
-      <section style={{ display: 'grid', gap: 12 }}>
-        {posts.map(p => (
-          <article key={p._id} style={{ border: '1px solid #ddd', padding: 12, borderRadius: 8 }}>
-            <h3 style={{ margin: 0 }}>{p.title}</h3>
-            <small>
-              {p.author || 'Anonymous'} · {p.createdAt ? new Date(p.createdAt).toLocaleString() : ''}
-            </small>
-            <p style={{ marginTop: 8, whiteSpace: 'pre-wrap' }}>{p.content}</p>
-          </article>
-        ))}
-        {!posts.length && <i>No posts yet.</i>}
-      </section>
-    </main>
-  );
+    <div className="min-h-screen max-w-5xl mx-auto px-4">
+      <Nav />
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="space-y-4">
+          {!user && <AuthForm />}
+          {user && <NewPostForm onCreated={bump} />}
+        </div>
+        <div className="space-y-4">
+          <h2 className="font-semibold text-lg">Homepage</h2>
+          <PostList refreshKey={refreshKey} />
+        </div>
+      </div>
+    </div>
+  )
 }
