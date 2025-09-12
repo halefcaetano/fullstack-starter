@@ -1,16 +1,10 @@
 // src/api.js
-import axios from 'axios'
-
-const API = axios.create({
-  baseURL: '/api',   // ← IMPORTANT: use the Vite proxy path
-})
-
+import axios from 'axios';
+const baseURL = import.meta?.env?.VITE_API_BASE || '/api';
+const API = axios.create({ baseURL });
 API.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
-})
-
-export default API
+  const token = localStorage.getItem('token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+export default API;

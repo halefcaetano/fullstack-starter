@@ -1,48 +1,68 @@
 // src/App.jsx
-import { useState } from 'react'
-import { useAuth } from './auth'
-import AuthForm from './components/AuthForm'
-import NewPostForm from './components/NewPostForm'
-import PostList from './components/PostList'
-import './App.css'
+import React, { useEffect, useMemo, useState } from 'react';
+import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
+import Home from './pages/Home.jsx';
+import Login from './pages/Login.jsx';
+import Compose from './pages/Compose.jsx';
+import Register from './pages/Register.jsx';
 
-function Nav() {
-  const { user, logout } = useAuth()
-  return (
-    <div className="w-full flex items-center justify-between py-3">
-      <div className="font-bold text-xl">Recipe Feed</div>
-      <div className="flex items-center gap-3">
-        {user ? (
-          <>
-            <span className="text-sm">Logged in as {user.username || user.email}</span>
-            <button className="px-3 py-1 rounded border" onClick={logout}>Log out</button>
-          </>
-        ) : (
-          <span className="text-sm text-neutral-600">Not logged in</span>
-        )}
-      </div>
-    </div>
-  )
+function useAuth() {
+  const [user, setUser] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; }
+  });
+  const isAuthed = !!localStorage.getItem('token');
+  const login = (token, userObj) => {
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(userObj || null));
+    setUser(userObj || null);
+  };
+  const logout = () => { localStorage.removeItem('token'); localStorage.removeItem('user'); setUser(null); };
+  return useMemo(() => ({ user, isAuthed, login, logout }), [user, isAuthed]);
 }
 
-export default function App() {
-  const { user } = useAuth()
-  const [refreshKey, setRefreshKey] = useState(0)
-  const bump = () => setRefreshKey(k => k + 1)
-
+function Navbar({ user, onLogout }) {
   return (
-    <div className="min-h-screen max-w-5xl mx-auto px-4">
-      <Nav />
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          {!user && <AuthForm />}
-          {user && <NewPostForm onCreated={bump} />}
-        </div>
-        <div className="space-y-4">
-          <h2 className="font-semibold text-lg">Homepage</h2>
-          <PostList refreshKey={refreshKey} />
-        </div>
+    <nav style={{padding:'12px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',borderBottom:'1px solid #eee'}}>
+      <Link to="/" style={{ textDecoration:'none', fontWeight:700 }}>My Blog</Link>
+      <div style={{ display:'flex', gap:12, alignItems:'center' }}>
+        {user ? (
+          <>
+            <span style={{ fontSize:14, opacity:0.8 }}>{user.username || user.email}</span>
+            <Link to="/compose">Compose</Link>
+            <button onClick={onLogout}>Logout</button>
+          </>
+        ) : (
+          <>
+            <Link to="/login">Login</Link>
+            <Link to="/register">Register</Link>
+          </>
+        )}
+      </div>
+    </nav>
+  );
+}
+
+function PrivateRoute({ authed, children }) { return authed ? children : <Navigate to="/login" replace />; }
+
+export default function App() {
+  const auth = useAuth();
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (localStorage.getItem('token') && !auth.user) { auth.logout(); navigate('/login'); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div>
+      <Navbar user={auth.user} onLogout={() => { auth.logout(); navigate('/'); }} />
+      <div style={{ maxWidth:720, margin:'24px auto', padding:'0 16px' }}>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login onLogin={(t,u)=>{auth.login(t,u); navigate('/compose');}} />} />
+          <Route path="/register" element={<Register onLogin={(t,u)=>{auth.login(t,u); navigate('/compose');}} />} />
+          <Route path="/compose" element={<PrivateRoute authed={auth.isAuthed}><Compose user={auth.user} /></PrivateRoute>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </div>
     </div>
-  )
+  );
 }
