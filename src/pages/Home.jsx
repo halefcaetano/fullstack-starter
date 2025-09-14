@@ -24,22 +24,37 @@ export default function Home() {
   return (
     <div>
       <h1 style={{ marginBottom: 16 }}>Latest Posts</h1>
-      {!isAuthed && <div style={{ margin:'8px 0 16px', fontSize:14 }}>
-        New here? <Link to="/register">Create an account</Link> to start posting.
-      </div>}
-      {err && <div style={{ color:'crimson', marginBottom:12 }}>{err}</div>}
+
+      {!isAuthed && (
+        <div style={{ margin: '8px 0 16px', fontSize: 14 }}>
+          New here? <Link to="/register">Create an account</Link> to start posting.
+        </div>
+      )}
+
+      {err && <div style={{ color: 'crimson', marginBottom: 12 }}>{err}</div>}
+
       {posts.length === 0 ? (
         <div>No posts yet.</div>
       ) : (
-        <ul style={{ listStyle:'none', padding:0, display:'grid', gap:16 }}>
-          {posts.map(p => (
-            <li key={p._id} style={{ border:'1px solid #eee', borderRadius:8, padding:16 }}>
-              <h2 style={{ margin:'0 0 8px 0' }}>{p.title}</h2>
-              <div style={{ fontSize:14, opacity:0.8, marginBottom:8 }}>
-                by {p.author?.username || p.author?.email || 'Anonymous'} {' · '}
-                {p.createdAt ? new Date(p.createdAt).toLocaleString() : ''}
-              </div>
-              <p style={{ whiteSpace:'pre-wrap', margin:0 }}>{p.content}</p>
+        <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 16 }}>
+          {posts.map((p) => (
+            <li key={p._id} style={{ padding: 0, border: 'none' }}>
+              <Link
+                to={`/posts/${p._id}`}
+                className="rounded-2xl border p-4 hover:underline-offset-2 hover:shadow-sm transition-shadow block"
+                style={{ display: 'block', border: '1px solid #eee', borderRadius: 8, padding: 16, textDecoration: 'none' }}
+              >
+                <h2 className="text-xl font-bold" style={{ margin: '0 0 8px 0', color: 'inherit' }}>
+                  {p.title}
+                </h2>
+                <div style={{ fontSize: 14, opacity: 0.8, marginBottom: 8 }}>
+                  by {p.author?.username || p.author?.email || 'Anonymous'} {' · '}
+                  {p.createdAt ? new Date(p.createdAt).toLocaleString() : ''}
+                </div>
+                <p style={{ whiteSpace: 'pre-wrap', margin: 0, color: 'inherit' }}>
+                  {p.content}
+                </p>
+              </Link>
             </li>
           ))}
         </ul>

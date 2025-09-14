@@ -5,6 +5,7 @@ import Home from './pages/Home.jsx';
 import Login from './pages/Login.jsx';
 import Compose from './pages/Compose.jsx';
 import Register from './pages/Register.jsx';
+import Post from './pages/Post.jsx'; // <-- added
 
 function useAuth() {
   const [user, setUser] = useState(() => {
@@ -60,6 +61,7 @@ export default function App() {
           <Route path="/login" element={<Login onLogin={(t,u)=>{auth.login(t,u); navigate('/compose');}} />} />
           <Route path="/register" element={<Register onLogin={(t,u)=>{auth.login(t,u); navigate('/compose');}} />} />
           <Route path="/compose" element={<PrivateRoute authed={auth.isAuthed}><Compose user={auth.user} /></PrivateRoute>} />
+          <Route path="/posts/:id" element={<Post />} /> {/* <-- added */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

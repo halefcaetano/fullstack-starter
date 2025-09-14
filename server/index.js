@@ -16,12 +16,12 @@ app.set('trust proxy', 1);
 // ---- middleware (must be before routes)
 app.use(cors());
 app.use(express.json()); // <-- must be before routes
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Backend listening on http://localhost:${PORT}`);
-});
+
 // ---- routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/posts', require('./routes/posts'));
+app.use('/api/events', require('./routes/events'));       // ensure events route exists
+app.use('/api/analytics', require('./routes/analytics')); // ensure analytics route exists
 
 // health check
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
@@ -33,7 +33,7 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
     await mongoose.connect(MONGODB_URI);
     console.log('✅ MongoDB connected');
 
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => {
       console.log(`✅ Backend listening on http://localhost:${PORT}`);
     });
   } catch (err) {
