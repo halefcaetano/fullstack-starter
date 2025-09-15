@@ -1,64 +1,62 @@
 // src/pages/Home.jsx
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import API from '../api';
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { fetchRecipes } from "../api";
 
 export default function Home() {
-  const [posts, setPosts] = useState([]);
-  const [err, setErr] = useState('');
-  const isAuthed = !!localStorage.getItem('token');
+  const [items, setItems] = useState([]);
 
   useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const { data } = await API.get('/posts');
-        if (alive) setPosts(Array.isArray(data) ? data : []);
-      } catch (e) {
-        setErr(e?.response?.data?.error || e.message || 'Failed to load posts');
-      }
-    })();
-    return () => { alive = false; };
+    fetchRecipes().then(setItems).catch(console.error);
   }, []);
 
   return (
-    <div>
-      <h1 style={{ marginBottom: 16 }}>Latest Posts</h1>
-
-      {!isAuthed && (
-        <div style={{ margin: '8px 0 16px', fontSize: 14 }}>
-          New here? <Link to="/register">Create an account</Link> to start posting.
-        </div>
-      )}
-
-      {err && <div style={{ color: 'crimson', marginBottom: 12 }}>{err}</div>}
-
-      {posts.length === 0 ? (
-        <div>No posts yet.</div>
-      ) : (
-        <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 16 }}>
-          {posts.map((p) => (
-            <li key={p._id} style={{ padding: 0, border: 'none' }}>
-              <Link
-                to={`/posts/${p._id}`}
-                className="rounded-2xl border p-4 hover:underline-offset-2 hover:shadow-sm transition-shadow block"
-                style={{ display: 'block', border: '1px solid #eee', borderRadius: 8, padding: 16, textDecoration: 'none' }}
-              >
-                <h2 className="text-xl font-bold" style={{ margin: '0 0 8px 0', color: 'inherit' }}>
-                  {p.title}
-                </h2>
-                <div style={{ fontSize: 14, opacity: 0.8, marginBottom: 8 }}>
-                  by {p.author?.username || p.author?.email || 'Anonymous'} {' · '}
-                  {p.createdAt ? new Date(p.createdAt).toLocaleString() : ''}
+    <div className="max-w-4xl mx-auto p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold">Recipes</h1>
+        <Link
+          className="px-3 py-2 rounded bg-blue-600 text-white"
+          to="/recipes/new"
+        >
+          New Recipe
+        </Link>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-4">
+        {items.map((r) => (
+          <article
+            key={r._id}
+            className="border rounded-lg overflow-hidden hover:shadow"
+          >
+            <div className="p-2 text-xs text-gray-500">
+              by {r.author?.username || "Anonymous"}
+            </div>
+            <Link to={`/recipes/${r._id}`}>
+              {r.imageUrl ? (
+                <img
+                  src={r.imageUrl}
+                  alt={r.title}
+                  className="w-full h-48 object-cover"
+                />
+              ) : (
+                <div className="w-full h-48 bg-gray-100 flex items-center justify-center">
+                  No Image
                 </div>
-                <p style={{ whiteSpace: 'pre-wrap', margin: 0, color: 'inherit' }}>
-                  {p.content}
-                </p>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+              )}
+              <div className="p-3">
+                <div className="font-semibold">{r.title}</div>
+                <div className="text-sm text-gray-500 mt-1">
+                  {Array.isArray(r.ingredients)
+                    ? r.ingredients.slice(0, 3).join(", ")
+                    : ""}
+                  {Array.isArray(r.ingredients) && r.ingredients.length > 3
+                    ? "…"
+                    : ""}
+                </div>
+              </div>
+            </Link>
+          </article>
+        ))}
+      </div>
     </div>
   );
 }

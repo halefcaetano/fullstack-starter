@@ -1,8 +1,7 @@
 // src/api.js
 import axios from 'axios';
 
-const baseURL = import.meta?.env?.VITE_API_BASE || '/api';
-const API = axios.create({ baseURL });
+const API = axios.create({ baseURL: '/api' }); // Vite proxy sends to http://localhost:4000
 
 API.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
@@ -10,29 +9,38 @@ API.interceptors.request.use((config) => {
   return config;
 });
 
+API.interceptors.response.use(
+  (r) => r,
+  (err) => {
+    if (err?.response?.status === 401) localStorage.removeItem('token');
+    return Promise.reject(err);
+  }
+);
+
 export default API;
 
-// Helpers
-export function getSessionId() {
-  let id = localStorage.getItem('sessionId');
-  if (!id) {
-    id =
-      (typeof crypto !== 'undefined' && crypto?.randomUUID?.()) ||
-      String(Math.random()).slice(2);
-    localStorage.setItem('sessionId', id);
-  }
-  return id;
+// === Recipes API ===
+export async function fetchRecipes() {
+  const { data } = await API.get('/recipes');
+  return data;
 }
-
-export async function logPostView(postId) {
-  const sessionId = getSessionId();
-  // fire-and-forget; ignore errors so UI never breaks on analytics
-  return API.post('/events/view', { postId, sessionId }).catch(() => {});
+export async function fetchMyRecipes() {
+  const { data } = await API.get('/recipes/mine');
+  return data;
 }
-
-export async function fetchDailyViews(postId, days = 14) {
-  const { data } = await API.get(`/analytics/posts/${postId}/views/daily`, {
-    params: { days },
-  });
-  return data.data; // array of { date, count }
+export async function fetchRecipeById(id) {
+  const { data } = await API.get(`/recipes/${id}`);
+  return data;
+}
+export async function createRecipe(payload) {
+  const { data } = await API.post('/recipes', payload);
+  return data;
+}
+export async function updateRecipe(id, payload) {
+  const { data } = await API.put(`/recipes/${id}`, payload);
+  return data;
+}
+export async function deleteRecipe(id) {
+  const { data } = await API.delete(`/recipes/${id}`);
+  return data;
 }
