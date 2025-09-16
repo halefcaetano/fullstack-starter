@@ -1,39 +1,57 @@
-// src/App.jsx
-import React, { useEffect, useMemo, useState } from 'react';
-import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
-import Home from './pages/Home.jsx';
-import Login from './pages/Login.jsx';
-import Compose from './pages/Compose.jsx';
-import Register from './pages/Register.jsx';
+import React from "react";
+import {
+  Routes,
+  Route,
+  Navigate,
+  Link,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
 
-function useAuth() {
-  const [user, setUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; }
-  });
-  const isAuthed = !!localStorage.getItem('token');
-  const login = (token, userObj) => {
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(userObj || null));
-    setUser(userObj || null);
-  };
-  const logout = () => { localStorage.removeItem('token'); localStorage.removeItem('user'); setUser(null); };
-  return useMemo(() => ({ user, isAuthed, login, logout }), [user, isAuthed]);
+import Home from "./pages/Home.jsx";
+import RecipeForm from "./pages/RecipeForm.jsx";
+import RecipeDetail from "./pages/RecipeDetail.jsx";
+import Login from "./pages/Login.jsx";
+import Register from "./pages/Register.jsx";
+import MyRecipes from "./pages/MyRecipes.jsx";
+import Chat from "./pages/Chat.jsx"; // ✅ NEW
+
+// Protect routes that require login
+function RequireAuth({ children }) {
+  const location = useLocation();
+  const token = localStorage.getItem("token");
+  if (!token) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+  return children;
 }
 
-function Navbar({ user, onLogout }) {
+// Header with navigation + logout
+function Header() {
+  const navigate = useNavigate();
+  const authed = !!localStorage.getItem("token");
+
+  function handleLogout() {
+    localStorage.removeItem("token");
+    localStorage.removeItem("sessionId"); // optional
+    navigate("/login", { replace: true });
+  }
+
   return (
-    <nav style={{padding:'12px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',borderBottom:'1px solid #eee'}}>
-      <Link to="/" style={{ textDecoration:'none', fontWeight:700 }}>My Blog</Link>
-      <div style={{ display:'flex', gap:12, alignItems:'center' }}>
-        {user ? (
-          <>
-            <span style={{ fontSize:14, opacity:0.8 }}>{user.username || user.email}</span>
-            <Link to="/compose">Compose</Link>
-            <button onClick={onLogout}>Logout</button>
-          </>
+    <nav style={{ display: "flex", gap: 16, padding: 12 }}>
+      <Link to="/recipes">Recipes</Link>
+      {authed && <Link to="/recipes/new">New Recipe</Link>}
+      <Link to="/chat" className="mr-3">
+        Chat
+      </Link> {/* ✅ ALWAYS VISIBLE LINK */}
+      <div style={{ marginLeft: "auto" }}>
+        {authed ? (
+          <button onClick={handleLogout}>Logout</button>
         ) : (
           <>
-            <Link to="/login">Login</Link>
+            <Link to="/login" style={{ marginRight: 12 }}>
+              Login
+            </Link>
             <Link to="/register">Register</Link>
           </>
         )}
@@ -42,27 +60,38 @@ function Navbar({ user, onLogout }) {
   );
 }
 
-function PrivateRoute({ authed, children }) { return authed ? children : <Navigate to="/login" replace />; }
-
+// Main App
 export default function App() {
-  const auth = useAuth();
-  const navigate = useNavigate();
-  useEffect(() => {
-    if (localStorage.getItem('token') && !auth.user) { auth.logout(); navigate('/login'); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   return (
-    <div>
-      <Navbar user={auth.user} onLogout={() => { auth.logout(); navigate('/'); }} />
-      <div style={{ maxWidth:720, margin:'24px auto', padding:'0 16px' }}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login onLogin={(t,u)=>{auth.login(t,u); navigate('/compose');}} />} />
-          <Route path="/register" element={<Register onLogin={(t,u)=>{auth.login(t,u); navigate('/compose');}} />} />
-          <Route path="/compose" element={<PrivateRoute authed={auth.isAuthed}><Compose user={auth.user} /></PrivateRoute>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </div>
-    </div>
+    <>
+      <Header />
+      <Routes>
+        <Route path="/" element={<Navigate to="/recipes" replace />} />
+        <Route path="/recipes" element={<Home />} />
+        <Route
+          path="/recipes/new"
+          element={
+            <RequireAuth>
+              <RecipeForm />
+            </RequireAuth>
+          }
+        />
+        <Route path="/recipes/:id" element={<RecipeDetail />} />
+        <Route
+          path="/my"
+          element={
+            <RequireAuth>
+              <MyRecipes />
+            </RequireAuth>
+          }
+        />
+        {/* ✅ CHAT ROUTE (no auth) */}
+        <Route path="/chat" element={<Chat />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        {/* fallback */}
+        <Route path="*" element={<Navigate to="/recipes" replace />} />
+      </Routes>
+    </>
   );
 }

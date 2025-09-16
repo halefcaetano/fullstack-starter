@@ -1,43 +1,78 @@
 // server/index.js
 require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
+const express  = require('express');
+const cors     = require('cors');
+const morgan   = require('morgan');
 const mongoose = require('mongoose');
 
 const app = express();
 
-// ---- config
-const PORT = process.env.PORT || 4000;
-const MONGODB_URI = process.env.MONGODB_URI; // set in server/.env
+// Middleware
+app.use(cors({ origin: true, credentials: true }));
+app.use(express.json());
+app.use(morgan('dev'));
 
-// If deploying behind a proxy (e.g., Cloud Run/Heroku), trust it
-app.set('trust proxy', 1);
+// MongoDB
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch(err => { console.error('Mongo error:', err); process.exit(1); });
 
-// ---- middleware (must be before routes)
-app.use(cors());
-app.use(express.json()); // <-- must be before routes
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Backend listening on http://localhost:${PORT}`);
-});
-// ---- routes
+// Routes
 app.use('/api/auth', require('./routes/auth'));
-app.use('/api/posts', require('./routes/posts'));
+app.use('/api/recipes', require('./routes/recipes'));
+app.use('/api/events', require('./routes/events'));
+app.use('/api/analytics', require('./routes/analytics'));
 
-// health check
+// Health check
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-// ---- db + server startup
-(async () => {
-  try {
-    if (!MONGODB_URI) throw new Error('MONGODB_URI is missing. Add it to server/.env');
-    await mongoose.connect(MONGODB_URI);
-    console.log('✅ MongoDB connected');
+// ================================
+// === Socket + History (Mongo) ===
+// ================================
+const http = require('http');
+const server = http.createServer(app);
 
-    app.listen(PORT, () => {
-      console.log(`✅ Backend listening on http://localhost:${PORT}`);
-    });
-  } catch (err) {
-    console.error('❌ Startup error:', err.message);
-    process.exit(1);
-  }
-})();
+const { Server } = require('socket.io');
+const io = new Server(server, {
+  cors: { origin: "*", methods: ["GET","POST"] },
+  path: "/socket.io",
+});
+
+const Message = require('./models/Message');
+
+// REST: history so reload shows previous messages (works across multiple ports/tabs)
+app.get('/api/chat/history', async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit || '200', 10), 500);
+  const docs = await Message.find({})
+    .sort({ createdAt: 1 })
+    .limit(limit)
+    .lean();
+  res.json(docs);
+});
+
+io.on('connection', (socket) => {
+  socket.join('global');
+
+  socket.on('chat:message', async (payload = {}) => {
+    const text = String(payload.text || '').trim().slice(0, 2000);
+    if (!text) return;
+    const username = String(payload.username || 'Anonymous').slice(0, 80);
+
+    // 1) persist
+    const doc = await Message.create({ text, username });
+
+    // 2) broadcast to everyone (all tabs / all frontend ports)
+    const msg = {
+      _id: String(doc._id),
+      text: doc.text,
+      username: doc.username,
+      createdAt: doc.createdAt,
+    };
+    io.to('global').emit('chat:message', msg);
+    console.log('💬', username, text);
+  });
+});
+
+// Start server
+const PORT = process.env.PORT || 4000;
+server.listen(PORT, () => console.log(`✅ Backend listening on http://localhost:${PORT}`));

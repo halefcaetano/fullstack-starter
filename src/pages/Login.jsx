@@ -1,40 +1,58 @@
-// src/pages/Login.jsx
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import API from '../api';
 
-export default function Login({ onLogin }) {
-  const [email, setEmail] = useState('halef.caetano@hotmail.com');
-  const [password, setPassword] = useState('haleff');
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState('');
+export default function Login() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
+  const from = useLocation().state?.from || '/';
 
-  async function handleSubmit(e) {
-    e.preventDefault(); setErr(''); setLoading(true);
+  async function onSubmit(e) {
+    e.preventDefault();
+    setError('');
     try {
       const { data } = await API.post('/auth/login', { email, password });
-      if (!data?.token) throw new Error('Missing token on response');
-      onLogin?.(data.token, data.user);
-    } catch (e2) {
-      setErr(e2?.response?.data?.error || e2.message || 'Login failed');
-    } finally { setLoading(false); }
+      localStorage.setItem('token', data.token);
+      if (data?.user?.username) {
+        localStorage.setItem('username', data.user.username); // ✅ NEW: save username
+      }
+      navigate(from, { replace: true });
+    } catch (e) {
+      setError(e?.response?.data?.error || e?.message || 'Login failed');
+    }
   }
 
   return (
-    <div>
-      <h1 style={{ marginBottom: 16 }}>Login</h1>
-      <form onSubmit={handleSubmit} style={{ display:'grid', gap:12 }}>
-        <label>Email
-          <input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} required />
-        </label>
-        <label>Password
-          <input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required />
-        </label>
-        <button type="submit" disabled={loading}>{loading?'Signing in…':'Sign in'}</button>
-        {err && <div style={{ color:'crimson' }}>{err}</div>}
+    <div className="max-w-xl mx-auto p-4">
+      <h1 className="text-3xl font-bold mb-4">Login</h1>
+      {error && <div className="mb-3 p-2 bg-red-100 text-red-700 rounded">{error}</div>}
+      <form onSubmit={onSubmit} className="space-y-3">
+        <div>
+          <label className="block text-sm mb-1">Email</label>
+          <input
+            className="w-full border rounded p-2"
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm mb-1">Password</label>
+          <input
+            className="w-full border rounded p-2"
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required
+          />
+        </div>
+        <button className="w-full px-4 py-2 bg-gray-600 text-white rounded">Sign in</button>
       </form>
-      <div style={{ marginTop:12, fontSize:14 }}>
-        Don’t have an account? <Link to="/register">Register</Link>
+      <div className="mt-3 text-sm">
+        No account? <Link to="/register" className="underline">Register</Link>
       </div>
     </div>
   );
