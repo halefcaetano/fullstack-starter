@@ -1,23 +1,51 @@
 // server/index.js
 require('dotenv').config();
-const express  = require('express');
-const cors     = require('cors');
-const morgan   = require('morgan');
+const express = require('express');
+const morgan = require('morgan');
 const mongoose = require('mongoose');
+const cors = require('cors');
 
 const app = express();
 
-// Middleware
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
+/**
+ * ----- CORS (single place, no other headers anywhere) -----
+ * Allow Codespaces (app.github.dev) + localhost.
+ */
+const ALLOW = [
+  /\.app\.github\.dev$/,             // any Codespaces app host
+  /^https?:\/\/localhost:\d+$/,      // localhost:*
+  /^https?:\/\/127\.0\.0\.1:\d+$/,   // 127.0.0.1:*
+];
+
+app.use(cors({
+  origin(origin, cb) {
+    if (!origin) return cb(null, true); // same-origin / curl
+    const ok = ALLOW.some(re => re.test(origin));
+    cb(null, ok);
+  },
+  credentials: false, // IMPORTANT: no creds with wildcard-ish CORS
+  methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+}));
+
+// ----- Basics -----
 app.use(morgan('dev'));
+app.use(express.json());
 
-// MongoDB
-mongoose.connect(process.env.MONGODB_URI)
+// ----- Mongo -----
+const MONGO_URI =
+  process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/fullstack-starter';
+
+mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ MongoDB connected'))
-  .catch(err => { console.error('Mongo error:', err); process.exit(1); });
+  .catch(err => {
+    console.error('Mongo error:', err);
+    process.exit(1);
+  });
 
-// Routes
+// ----- Models -----
+const Message = require('./models/Message');
+
+// ----- Your existing REST routes (keep these) -----
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/recipes', require('./routes/recipes'));
 app.use('/api/events', require('./routes/events'));
@@ -26,28 +54,29 @@ app.use('/api/analytics', require('./routes/analytics'));
 // Health check
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-// ================================
-// === Socket + History (Mongo) ===
-// ================================
+// Chat history for refresh (both 5173 & 5174 will call this)
+app.get('/api/chat/history', async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit || '200', 10), 500);
+  const docs = await Message.find({}).sort({ createdAt: 1 }).limit(limit).lean();
+  res.json(docs);
+});
+
+// ----- Socket.IO on the SAME HTTP server -----
 const http = require('http');
 const server = http.createServer(app);
 
 const { Server } = require('socket.io');
 const io = new Server(server, {
-  cors: { origin: "*", methods: ["GET","POST"] },
-  path: "/socket.io",
-});
-
-const Message = require('./models/Message');
-
-// REST: history so reload shows previous messages (works across multiple ports/tabs)
-app.get('/api/chat/history', async (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit || '200', 10), 500);
-  const docs = await Message.find({})
-    .sort({ createdAt: 1 })
-    .limit(limit)
-    .lean();
-  res.json(docs);
+  cors: {
+    origin(origin, cb) {
+      if (!origin) return cb(null, true);
+      const ok = ALLOW.some(re => re.test(origin));
+      cb(null, ok);
+    },
+    methods: ['GET','POST'],
+    credentials: false,
+  },
+  path: '/socket.io',
 });
 
 io.on('connection', (socket) => {
@@ -58,10 +87,10 @@ io.on('connection', (socket) => {
     if (!text) return;
     const username = String(payload.username || 'Anonymous').slice(0, 80);
 
-    // 1) persist
+    // Persist to Mongo
     const doc = await Message.create({ text, username });
 
-    // 2) broadcast to everyone (all tabs / all frontend ports)
+    // Broadcast to everyone (all tabs/ports)
     const msg = {
       _id: String(doc._id),
       text: doc.text,
@@ -73,6 +102,8 @@ io.on('connection', (socket) => {
   });
 });
 
-// Start server
+// ----- Listen (IMPORTANT: server.listen, not app.listen) -----
 const PORT = process.env.PORT || 4000;
-server.listen(PORT, () => console.log(`✅ Backend listening on http://localhost:${PORT}`));
+server.listen(PORT, () => {
+  console.log(`✅ Backend listening on http://localhost:${PORT}`);
+});
