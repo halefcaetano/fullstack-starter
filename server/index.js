@@ -53,15 +53,23 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 /**
  * Chat history for refresh (optional)
- * GET /api/chat/history?room=public&limit=50
+ * GET /api/chat/history?limit=50
  * Returns chronological (oldest→newest)
  */
-const { fetchRecent } = require('./services/chatService');
+const { fetchRecent, clearAllMessages } = require('./services/chatService');
 app.get('/api/chat/history', async (req, res) => {
+// Danger: clear all chat messages (admin/cleanup)
+app.delete('/api/chat/history', async (req, res) => {
   try {
-    const room = String(req.query.room || 'public');
+    await clearAllMessages();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to clear chat' });
+  }
+});
+  try {
     const limit = Math.min(parseInt(req.query.limit || '200', 10), 500);
-    const recent = await fetchRecent(room, limit);
+    const recent = await fetchRecent(limit);
     res.json(recent);
   } catch (e) {
     console.error('history error', e);
@@ -122,12 +130,11 @@ io.on('connection', async (socket) => {
     console.error('Socket error:', err);
   });
 
-  // On connect, send public chat history
+  // On connect, send chat history
   try {
-    const history = await fetchRecent('public', 50);
+    const history = await fetchRecent(50);
     for (const m of history) {
       socket.emit('chat:message', {
-        room: 'public',
         username: m.username,
         message: m.message,
         replayed: true,
@@ -140,56 +147,29 @@ io.on('connection', async (socket) => {
 
   // broadcast a new chat message
   socket.on('chat:message', async ({ message }) => {
+    console.log('[SOCKET] chat:message received from', socket.user, 'message:', message);
     if (!message || typeof message !== 'string') return;
     const payload = {
-      room: 'public',
       username: socket.user.username,
       message,
       replayed: false,
       ts: Date.now(),
     };
     io.emit('chat:message', payload);
+    console.log('[SOCKET] chat:message broadcasted', payload);
     try {
       await createMessage({
-        room: 'public',
         userId: socket.user.id,
         username: socket.user.username,
         message,
       });
+      console.log('[SOCKET] chat:message saved to DB');
     } catch (e) {
       console.error('store chat error', e.message);
     }
   });
 
-  // return rooms list (ack)
-  socket.on('chat:userinfo', (cb) => {
-    const rooms = [...socket.rooms].filter((r) => r !== socket.id);
-    cb?.({ rooms, user: socket.user, socketId: socket.id });
-  });
-
-  // join/switch rooms
-  socket.on('chat:join', async ({ room }) => {
-    if (!room || typeof room !== 'string') return;
-    for (const r of socket.rooms) if (r !== socket.id) socket.leave(r);
-    socket.join(room);
-    io.to(room).emit('chat:message', {
-      room,
-      username: null,
-      message: `${socket.user.username} joined ${room}`,
-      replayed: false,
-      ts: Date.now(),
-    });
-    const history = await fetchRecent(room, 50);
-    for (const m of history) {
-      socket.emit('chat:message', {
-        room: m.room,
-        username: m.username,
-        message: m.message,
-        replayed: true,
-        ts: new Date(m.createdAt).getTime(),
-      });
-    }
-  });
+  // No room/userinfo logic needed
 
   socket.on('disconnect', (reason) => {
     console.log('🔌 socket disconnected', socket.id, reason);
