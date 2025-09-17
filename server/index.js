@@ -86,6 +86,7 @@ const { createMessage } = require('./services/chatService');
 
 const httpServer = http.createServer(app);
 
+
 const io = new Server(httpServer, {
   cors: {
     origin: [
@@ -95,6 +96,7 @@ const io = new Server(httpServer, {
     credentials: true,
   },
 });
+app.set('io', io);
 
 // Auth guard for sockets (JWT taken from auth field)
 io.use((socket, next) => {

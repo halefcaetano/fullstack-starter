@@ -6,15 +6,24 @@ export function useSocket(token) {
   const [status, setStatus] = useState('waiting');
 
   // Make exactly one socket for the current token
-  const socket = useMemo(() => {
-    if (!token) return null;
-    return io('/', {
+  const [socket, setSocket] = useState(null);
+  useEffect(() => {
+    setStatus('waiting');
+    if (!token) {
+      setSocket(null);
+      return;
+    }
+    const s = io('/', {
       path: '/socket.io',
       transports: ['websocket'],
       withCredentials: true,
       auth: { token },
       reconnectionAttempts: 5,
     });
+    setSocket(s);
+    return () => {
+      s.close();
+    };
   }, [token]);
 
   useEffect(() => {
@@ -34,7 +43,6 @@ export function useSocket(token) {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.offAny(onAny);
-      socket.close();
     };
   }, [socket]);
 

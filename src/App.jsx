@@ -8,7 +8,7 @@ import {
   useLocation,
 } from "react-router-dom";
 
-import Home from "./pages/Home.jsx";
+import Recipes from "./pages/Recipes.jsx";
 import RecipeForm from "./pages/RecipeForm.jsx";
 import RecipeDetail from "./pages/RecipeDetail.jsx";
 import Login from "./pages/Login.jsx";
@@ -61,13 +61,15 @@ function Header() {
 }
 
 // Main App
+import { SocketProvider } from "./hooks/SocketProvider.jsx";
+
 export default function App() {
   return (
-    <>
+    <SocketProvider>
       <Header />
       <Routes>
         <Route path="/" element={<Navigate to="/recipes" replace />} />
-        <Route path="/recipes" element={<Home />} />
+  <Route path="/recipes" element={<Recipes />} />
         <Route
           path="/recipes/new"
           element={
@@ -92,6 +94,6 @@ export default function App() {
         {/* fallback */}
         <Route path="*" element={<Navigate to="/recipes" replace />} />
       </Routes>
-    </>
+    </SocketProvider>
   );
 }

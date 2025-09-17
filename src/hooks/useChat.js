@@ -2,19 +2,17 @@ import { useEffect, useState } from 'react';
 
 export function useChat(socket) {
   const [messages, setMessages] = useState([]);
-  const room = 'public';
 
-  // Load chat history only once on mount or when room changes
+  // Load chat history only once on mount
   useEffect(() => {
     let mounted = true;
-    fetch(`/api/chat/history?room=public&limit=50`)
+    fetch(`/api/chat/history?limit=50`)
       .then(res => res.ok ? res.json() : [])
       .then(data => {
         if (Array.isArray(data) && mounted) {
           setMessages(data
-            .filter(m => m.message !== `${m.username} joined public` && m.message !== 'join room')
+            .filter(m => m && typeof m.message === 'string')
             .map(m => ({
-              room: m.room,
               username: m.username,
               message: m.message,
               replayed: true,
@@ -37,6 +35,7 @@ export function useChat(socket) {
     }
     const onMsg = (m) => {
       console.log('[chat] received message', m);
+      if (!m || typeof m.message !== 'string') return;
       setMessages((prev) => [...prev, m]);
     };
     socket.on('chat:message', onMsg);
@@ -46,10 +45,13 @@ export function useChat(socket) {
   const send = async (text) => {
     const s = (text || '').trim();
     if (!s) return;
-
-    console.log('[chat] sending message', s, 'to room', room);
-    socket.emit('chat:message', { room: 'public', message: s });
+    console.log('[chat] sending message', s);
+    if (!socket) {
+      console.warn('[chat] No socket available to send message');
+      return;
+    }
+    socket.emit('chat:message', { message: s });
   };
 
-  return { room, messages, send };
+  return { messages, send };
 }

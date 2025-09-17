@@ -105,6 +105,19 @@ router.post('/', requireAuth, async (req, res) => {
       author: req.user.id,
     });
 
+    // Emit socket event for new recipe
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('recipe:new', {
+        _id: recipe._id,
+        title: recipe.title,
+        ingredients: recipe.ingredients,
+        imageUrl: recipe.imageUrl,
+        instructions: recipe.instructions,
+        author: req.user.id,
+      });
+    }
+
     const json = recipe.toJSON?.() || recipe;
     res.status(201).json({ ...json, likesCount: 0, liked: false });
   } catch (e) {
